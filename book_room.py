@@ -3,8 +3,8 @@
 Auto-book a Northwestern LibCal room (Mudd 2146 or Core Room B) the moment the slot opens.
 
 Booking window: rooms open 7 days ahead at midnight Central.
-Each room's default day is split across two emails (4h max, 1 booking/day each):
-  mudd: 4-8pm + 8pm-midnight     core: 10am-2pm + 2-6pm
+Each room's default day is split across three emails (4h max, 1 booking/day each):
+  mudd: 12-4am + 4-8pm + 8pm-midnight     core: 10am-2pm + 2-6pm + 6-9pm
 
 Usage:
   python3 book_room.py --netid abc1234 --room core  # wait for midnight, book date 7 days out
@@ -23,14 +23,17 @@ FIRST, LAST = "Jacob", "He"
 AFFILIATION = "Undergraduate"
 EMAIL_A = "jacobhe2029@u.northwestern.edu"
 EMAIL_B = "jacobhe@u.northwestern.edu"
+EMAIL_C = "jacobh@u.northwestern.edu"
 # Each email: max 4h per booking, 1 booking per day per category.
 ROOMS = {
     "mudd": dict(name="Mudd 2146", lid=925, gid=1584, eid=82373,
                  page="/spaces?lid=925&gid=1584",
-                 blocks=[("16:00", "20:00", EMAIL_A), ("20:00", "24:00", EMAIL_B)]),  # 24:00 = midnight
+                 blocks=[("00:00", "04:00", EMAIL_C), ("16:00", "20:00", EMAIL_A),
+                         ("20:00", "24:00", EMAIL_B)]),  # 24:00 = midnight
     "core": dict(name="Core Room B", lid=1998, gid=1578, eid=6069,
                  page="/reserve/corerooms",
-                 blocks=[("10:00", "14:00", EMAIL_A), ("14:00", "18:00", EMAIL_B)]),
+                 blocks=[("10:00", "14:00", EMAIL_A), ("14:00", "18:00", EMAIL_B),
+                         ("18:00", "21:00", EMAIL_C)]),
 }
 LID = GID = EID = ROOM_NAME = PAGE = BLOCKS = None   # set from --room in main()
 DAYS_AHEAD = 7
