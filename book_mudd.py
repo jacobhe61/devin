@@ -116,9 +116,20 @@ def book_block(date, start, end, email, netid, dry_run, results):
         if want_end not in b["options"]:
             raise RuntimeError(f"end {end} not allowed; options: {b['options']}")
         i = b["options"].index(want_end)
+        nxt = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+        upd = {"update[id]": b["id"], "update[checksum]": b["optionChecksums"][i],
+               "update[end]": want_end, "lid": LID, "gid": GID, "start": date, "end": nxt}
+        cur = {"id": b["id"], "eid": EID, "seat_id": 0, "gid": GID, "lid": LID,
+               "start": b["start"][:16], "end": b["end"][:16], "checksum": b["checksum"]}
+        for k, v in cur.items():
+            upd[f"bookings[0][{k}]"] = v
+        r = s.post(f"{BASE}/spaces/availability/booking/add", data=upd, timeout=10)
+        r.raise_for_status()
+        b = r.json()["bookings"][0]
+        if b["end"] != want_end:
+            raise RuntimeError(f"end-time update failed: got {b['end']}")
         booking = {"id": b["id"], "eid": EID, "seat_id": 0, "gid": GID, "lid": LID,
-                   "start": b["start"][:16], "end": want_end[:16],
-                   "checksum": b["optionChecksums"][i]}
+                   "start": b["start"][:16], "end": b["end"][:16], "checksum": b["checksum"]}
 
         # 3) submit times -> get session id from the form
         times = {"patron": "", "patronHash": "", "method": 11,
@@ -178,6 +189,8 @@ def main():
         t.join()
     for k, v in results.items():
         log(f"{k}: {v}")
+    if any(not v.startswith(("BOOKED", "DRY RUN")) for v in results.values()):
+        sys.exit(1)
 
 
 if __name__ == "__main__":
