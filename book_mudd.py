@@ -23,7 +23,7 @@ FIRST, LAST = "Jacob", "He"
 AFFILIATION = "Undergraduate"
 BLOCKS = [                                 # (start, end, email) — 24h "HH:MM"
     ("16:00", "20:00", "jacobhe2029@u.northwestern.edu"),
-    ("20:00", "23:00", "jacobhe@u.northwestern.edu"),
+    ("20:00", "24:00", "jacobhe@u.northwestern.edu"),   # 24:00 = midnight
 ]
 DAYS_AHEAD = 7
 OPEN_TIME = "00:00"      # Central; polling starts LEAD_SECONDS before this
@@ -111,8 +111,11 @@ def book_block(date, start, end, email, netid, dry_run, results):
         b = j["bookings"][0]
 
         # 2) pick end time from the allowed options
-        want_end = f"{date} {end}:00" if end != "24:00" else \
-            (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
+        if end == "24:00":   # midnight; on the newest bookable day LibCal ends it at 23:59
+            nd = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
+            want_end = next((o for o in (nd, f"{date} 23:59:00") if o in b["options"]), nd)
+        else:
+            want_end = f"{date} {end}:00"
         if want_end not in b["options"]:
             raise RuntimeError(f"end {end} not allowed; options: {b['options']}")
         i = b["options"].index(want_end)
@@ -166,9 +169,14 @@ def main():
     ap.add_argument("--netid", required=True)
     ap.add_argument("--date", help="YYYY-MM-DD (default: today + 7, Central)")
     ap.add_argument("--now", action="store_true", help="don't wait for opening time")
+    ap.add_argument("--blocks", help='override, e.g. "23:00-24:00=a@u.northwestern.edu,16:00-20:00=b@..."')
     ap.add_argument("--dry-run", action="store_true", help="do everything except final submit")
     a = ap.parse_args()
 
+    global BLOCKS
+    if a.blocks:
+        BLOCKS = [(x.split("=")[0].split("-")[0].strip(), x.split("=")[0].split("-")[1].strip(),
+                   x.split("=")[1].strip()) for x in a.blocks.split(",") if x.strip()]
     if a.date:
         date = a.date
     else:
