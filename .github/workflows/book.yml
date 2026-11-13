@@ -1,0 +1,17 @@
+name: Book Mudd 2146
+
+on:
+  schedule:
+    - cron: "15 6 * * *"   # 12:15am Central (CST). GitHub may run it a bit late — fine.
+  workflow_dispatch:        # "Run workflow" button for manual runs/tests
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python book_mudd.py --netid "${{ secrets.NETID }}" --now
