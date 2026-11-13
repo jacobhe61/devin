@@ -4,7 +4,7 @@ Auto-book a Northwestern LibCal room (Mudd 2146 or Core Room B) the moment the s
 
 Booking window: rooms open 7 days ahead at midnight Central.
 Each room's default day is split across two emails (4h max, 1 booking/day each):
-  mudd: 4-8pm + 8pm-midnight     core: 9am-1pm + 1-5pm
+  mudd: 4-8pm + 8pm-midnight     core: 10am-2pm + 2-6pm
 
 Usage:
   python3 book_room.py --netid abc1234 --room core  # wait for midnight, book date 7 days out
@@ -30,7 +30,7 @@ ROOMS = {
                  blocks=[("16:00", "20:00", EMAIL_A), ("20:00", "24:00", EMAIL_B)]),  # 24:00 = midnight
     "core": dict(name="Core Room B", lid=1998, gid=1578, eid=6069,
                  page="/reserve/corerooms",
-                 blocks=[("09:00", "13:00", EMAIL_A), ("13:00", "17:00", EMAIL_B)]),
+                 blocks=[("10:00", "14:00", EMAIL_A), ("14:00", "18:00", EMAIL_B)]),
 }
 LID = GID = EID = ROOM_NAME = PAGE = BLOCKS = None   # set from --room in main()
 DAYS_AHEAD = 7
