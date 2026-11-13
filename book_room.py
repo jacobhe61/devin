@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Auto-book Mudd 2146 (Northwestern LibCal) the moment the slot opens.
+Auto-book a Northwestern LibCal room (Mudd 2146 or Core Room B) the moment the slot opens.
 
 Booking window: rooms open 7 days ahead at midnight Central.
-Splits 4pm-11pm across two emails (4h limit each): 4-8pm + 8-11pm.
+Each room's default day is split across two emails (4h max, 1 booking/day each):
+  mudd: 4-8pm + 8pm-midnight     core: 9am-1pm + 1-5pm
 
 Usage:
-  python3 book_mudd.py --netid abc1234            # wait for midnight, book date 7 days out
-  python3 book_mudd.py --netid abc1234 --now      # skip waiting (date already open)
-  python3 book_mudd.py --netid abc1234 --date 2026-11-20 --now --dry-run
+  python3 book_room.py --netid abc1234 --room core  # wait for midnight, book date 7 days out
+  python3 book_room.py --netid abc1234 --now      # skip waiting (date already open)
+  python3 book_room.py --netid abc1234 --date 2026-11-20 --now --dry-run
 """
 import argparse, re, sys, threading, time
 from datetime import datetime, timedelta
@@ -18,13 +19,20 @@ import requests
 
 # ---------------- config ----------------
 BASE = "https://northwestern.libcal.com"
-LID, GID, EID = 925, 1584, 82373          # Mudd Library / Mudd Study Rooms / Mudd 2146
 FIRST, LAST = "Jacob", "He"
 AFFILIATION = "Undergraduate"
-BLOCKS = [                                 # (start, end, email) — 24h "HH:MM"
-    ("16:00", "20:00", "jacobhe2029@u.northwestern.edu"),
-    ("20:00", "24:00", "jacobhe@u.northwestern.edu"),   # 24:00 = midnight
-]
+EMAIL_A = "jacobhe2029@u.northwestern.edu"
+EMAIL_B = "jacobhe@u.northwestern.edu"
+# Each email: max 4h per booking, 1 booking per day per category.
+ROOMS = {
+    "mudd": dict(name="Mudd 2146", lid=925, gid=1584, eid=82373,
+                 page="/spaces?lid=925&gid=1584",
+                 blocks=[("16:00", "20:00", EMAIL_A), ("20:00", "24:00", EMAIL_B)]),  # 24:00 = midnight
+    "core": dict(name="Core Room B", lid=1998, gid=1578, eid=6069,
+                 page="/reserve/corerooms",
+                 blocks=[("09:00", "13:00", EMAIL_A), ("13:00", "17:00", EMAIL_B)]),
+}
+LID = GID = EID = ROOM_NAME = PAGE = BLOCKS = None   # set from --room in main()
 DAYS_AHEAD = 7
 OPEN_TIME = "00:00"      # Central; polling starts LEAD_SECONDS before this
 LEAD_SECONDS = 20
@@ -48,8 +56,8 @@ def log(msg):
 def new_session(date):
     s = requests.Session()
     s.headers.update(HDRS)
-    s.headers["Referer"] = f"{BASE}/spaces?lid={LID}&gid={GID}&d={date}"
-    s.get(f"{BASE}/spaces?lid={LID}&gid={GID}", timeout=10)   # cookies
+    s.headers["Referer"] = f"{BASE}{PAGE}"
+    s.get(f"{BASE}{PAGE}", timeout=10)   # cookies
     return s
 
 
@@ -79,7 +87,7 @@ def wait_until_open(date):
         try:
             slots = grid(s, date)
             if slots:
-                log(f"Open! {len(slots)} slots visible for Mudd 2146")
+                log(f"Open! {len(slots)} slots visible for {ROOM_NAME}")
                 return slots
         except Exception as e:
             log(f"poll error: {e}")
@@ -136,7 +144,7 @@ def book_block(date, start, end, email, netid, dry_run, results):
 
         # 3) submit times -> get session id from the form
         times = {"patron": "", "patronHash": "", "method": 11,
-                 "returnUrl": f"/spaces?lid={LID}&gid={GID}"}
+                 "returnUrl": PAGE}
         for k, v in booking.items():
             times[f"bookings[0][{k}]"] = v
         r = s.post(f"{BASE}/ajax/space/times", data=times, timeout=10)
@@ -151,7 +159,7 @@ def book_block(date, start, end, email, netid, dry_run, results):
         form = {"session": sid, "fname": FIRST, "lname": LAST, "email": email,
                 "q13007": netid, "q11794": AFFILIATION,
                 "bookings": json.dumps([booking], separators=(",", ":")),
-                "returnUrl": f"/spaces?lid={LID}&gid={GID}", "pickupHolds": "", "method": 11}
+                "returnUrl": PAGE, "pickupHolds": "", "method": 11}
         if dry_run:
             s.post(f"{BASE}/ajax/space/session/end", data={"session": sid}, timeout=10)
             results[tag] = f"DRY RUN ok (hold released) — would send {booking}"
@@ -167,13 +175,16 @@ def book_block(date, start, end, email, netid, dry_run, results):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--netid", required=True)
+    ap.add_argument("--room", choices=ROOMS, default="mudd")
     ap.add_argument("--date", help="YYYY-MM-DD (default: today + 7, Central)")
     ap.add_argument("--now", action="store_true", help="don't wait for opening time")
     ap.add_argument("--blocks", help='override, e.g. "23:00-24:00=a@u.northwestern.edu,16:00-20:00=b@..."')
     ap.add_argument("--dry-run", action="store_true", help="do everything except final submit")
     a = ap.parse_args()
 
-    global BLOCKS
+    global LID, GID, EID, ROOM_NAME, PAGE, BLOCKS
+    r = ROOMS[a.room]
+    LID, GID, EID, ROOM_NAME, PAGE, BLOCKS = r["lid"], r["gid"], r["eid"], r["name"], r["page"], r["blocks"]
     if a.blocks:
         BLOCKS = [(x.split("=")[0].split("-")[0].strip(), x.split("=")[0].split("-")[1].strip(),
                    x.split("=")[1].strip()) for x in a.blocks.split(",") if x.strip()]
@@ -184,7 +195,7 @@ def main():
         if not a.now and base.strftime("%H:%M") > OPEN_TIME:   # e.g. launched 11:58pm
             base += timedelta(days=1)
         date = (base + timedelta(days=DAYS_AHEAD)).strftime("%Y-%m-%d")
-    log(f"Target: Mudd 2146 on {date}, blocks {[(b[0], b[1]) for b in BLOCKS]}")
+    log(f"Target: {ROOM_NAME} on {date}, blocks {[(b[0], b[1]) for b in BLOCKS]}")
 
     if not a.now:
         wait_until_open(date)

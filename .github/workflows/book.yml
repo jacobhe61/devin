@@ -25,7 +25,7 @@ jobs:
           args=(--netid "$NETID" --now)
           [ -n "$DATE" ] && args+=(--date "$DATE")
           [ -n "$BLOCKS" ] && args+=(--blocks "$BLOCKS")
-          python book_mudd.py "${args[@]}"
+          python book_room.py --room mudd "${args[@]}"
         env:
           NETID: ${{ secrets.NETID }}
           DATE: ${{ inputs.date }}
